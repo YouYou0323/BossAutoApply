@@ -49,14 +49,14 @@
 
 ## 📸 效果预览
 
-> <img width="1025" height="222" alt="image" src="https://github.com/user-attachments/assets/cb1f9d4e-99b2-4bca-ad85-2201c9d306fa" />
-<img width="1917" height="932" alt="屏幕截图 2026-06-18 132323" src="https://github.com/user-attachments/assets/07e24cb6-a31c-4cce-bf76-eb37f20f4965" />
-<img width="1917" height="932" alt="屏幕截图 2026-06-18 132323" src="https://github.com/user-attachments/assets/ce34f0d1-344c-4afb-81d9-4e89984d8be3" />
-<img width="1918" height="971" alt="屏幕截图 2026-06-18 132634" src="https://github.com/user-attachments/assets/0ddceb7e-85ee-44ee-adca-c14cff29cf14" />
-<img width="1918" height="972" alt="屏幕截图 2026-06-18 132652" src="https://github.com/user-attachments/assets/84f94b35-1afb-4354-9899-aa2a8752f8c5" />
+### ① 审核确认（公司名 / 明文薪资 / 活跃度 / 外包跳过）
+<img alt="审核确认列表" src="JobCopilot%20%C2%B7%20AI/docs/review-list.png" />
 
-> 投递流程图
-<img width="1080" height="1510" alt="96ed071aa0c52a2f18e9d0d7a8f07904_compress" src="https://github.com/user-attachments/assets/5288b3ba-03a6-4712-b113-22dccd631282" />
+### ② 投递日志（称呼个性化招呼语）
+<img alt="投递日志" src="JobCopilot%20%C2%B7%20AI/docs/deliver-log.png" />
+
+### ③ 配置区（排除公司关键词 / HR 活跃度要求）
+<img alt="配置区" src="JobCopilot%20%C2%B7%20AI/docs/config.png" />
 
 ```
 配置岗位/城市/数量  →  开始收集+AI筛选  →  审核勾选  →  自动投递  →  ✓ 完成
