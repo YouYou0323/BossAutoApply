@@ -6,6 +6,8 @@ const DS_MODEL = 'deepseek-chat';
 const RESUME_TEXT = ''; // 不内置任何个人简历，由用户在设置页"简历文字"填写
 // 发完简历图片后附带的固定跟进用语（原样发送给 HR）
 const FOLLOWUP_TEXT = '这是我的简历 您这边如果感兴趣的话我发你pdf完整版，我这边能一周内尽快到岗';
+// AI 招呼语生成为空/失败时使用的固定兜底招呼语
+const FALLBACK_GREETING = '您好，我是杨媛媛，本科计算机科班出身，有6个月全职测试工程师实战经验。熟练掌握完整测试流程，擅长使用 XMind 梳理需求，运用等价类、边界值等方法设计功能用例；能独立用 Postman 完成接口测试、JMeter 开展性能压测，也可基于 Python+Selenium/RobotFramework 编写 Web 自动化脚本。\n在职期间负责医院预算、收费账务、银企对账 / 直连 4 套财务 B 端系统测试，累计提交闭环 BUG170 个；军工业务方面可独立完成兵力、环境仿真软件的测试计划、测试报告等 6 份标准化文档，同时具备 C/C++、Linux、MySQL 开发基础，有自研视频点播项目全流程自测经验。\n目前已离职可随时到岗，非常看好贵司测试工程师岗位，希望能获得沟通机会，简历已附上期待您查看。';
 
 let state = {
   phase: 'idle', paused: false, aborted: false,
@@ -298,7 +300,10 @@ async function runDeliver(jobIds) {
     const callName = deriveGreeting(job);
     if (callName) log('  称呼：' + callName);
     try { greeting = await genGreetingFromJD(cfg, job, jd, callName); } catch (e) { log('  生成失败：' + e.message, 'error'); }
-    if (!greeting) { recordFail(job, '招呼语生成失败'); log('  招呼语为空，跳过', 'warn'); progress(k + 1, ids.length, '投递'); continue; }
+    if (!greeting) {
+      greeting = FALLBACK_GREETING;
+      log('  AI 招呼语为空，改用固定兜底招呼语', 'warn');
+    }
 
     // 3. 点立即沟通 → 继续沟通（跳聊天页）
     log('  建立联系（立即沟通 → 继续沟通）...');
