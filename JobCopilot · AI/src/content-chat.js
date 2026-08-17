@@ -1,4 +1,4 @@
-// ===== 聊天页 content script：打开会话 + 先发图片 + 再发招呼语 =====
+// ===== 聊天页 content script：打开会话 + 先发招呼语 + 再发简历图片 + 固定跟进用语 =====
 (function () {
   if (window.__bossToudiChat) return;
   window.__bossToudiChat = true;
@@ -127,15 +127,20 @@
   async function doSend(msg) {
     const oc = await openConversation(msg.company, msg.hrName, msg.position);
     if (!oc.ok) return { success: false, error: oc.err };
+    // 顺序：招呼语 → 简历图片 → 固定跟进用语
+    const tr1 = await sendText(msg.greeting);
+    if (!tr1.ok) return { success: false, error: tr1.err };
     const imgOk = await sendImage(msg.image);
-    await sleep(800);
-    const tr = await sendText(msg.greeting);
-    if (!tr.ok) return { success: false, error: tr.err };
+    if (msg.image && msg.followup) {
+      await sleep(800);
+      const tr2 = await sendText(msg.followup);
+      if (!tr2.ok) return { success: false, error: tr2.err };
+    }
     return { success: true, imageOk: imgOk };
   }
 
   // 发给当前已打开的会话（点继续沟通后跳进来的就是目标岗位，无需匹配）
-  async function sendActive(image, greeting) {
+  async function sendActive(image, greeting, followup) {
     let input = await waitVisible(INPUT_SELS, 6000);
     if (!input) {
       const items = document.querySelectorAll(SELECTORS.chat.userList);
@@ -143,10 +148,15 @@
       input = await waitVisible(INPUT_SELS, 6000);
     }
     if (!input) return { success: false, error: '未找到输入框｜' + dumpInputs() };
+    // 顺序：招呼语 → 简历图片 → 固定跟进用语
+    const tr1 = await sendText(greeting);
+    if (!tr1.ok) return { success: false, error: tr1.err };
     const imgOk = await sendImage(image);
-    await sleep(800);
-    const tr = await sendText(greeting);
-    if (!tr.ok) return { success: false, error: tr.err };
+    if (image && followup) {
+      await sleep(800);
+      const tr2 = await sendText(followup);
+      if (!tr2.ok) return { success: false, error: tr2.err };
+    }
     return { success: true, imageOk: imgOk };
   }
 
@@ -156,7 +166,7 @@
       return true;
     }
     if (msg.type === 'SEND_ACTIVE') {
-      sendActive(msg.image, msg.greeting).then(r => sendResponse(r)).catch(e => sendResponse({ success: false, error: e.message }));
+      sendActive(msg.image, msg.greeting, msg.followup).then(r => sendResponse(r)).catch(e => sendResponse({ success: false, error: e.message }));
       return true;
     }
   });

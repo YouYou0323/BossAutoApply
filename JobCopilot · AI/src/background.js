@@ -4,6 +4,8 @@ const DS_ENDPOINT = 'https://api.deepseek.com/v1/chat/completions';
 const DS_MODEL = 'deepseek-chat';
 
 const RESUME_TEXT = ''; // 不内置任何个人简历，由用户在设置页"简历文字"填写
+// 发完简历图片后附带的固定跟进用语（原样发送给 HR）
+const FOLLOWUP_TEXT = '这是我的简历 您这边如果感兴趣的话我发你pdf完整版，我这边能一周内尽快到岗';
 
 let state = {
   phase: 'idle', paused: false, aborted: false,
@@ -285,12 +287,12 @@ async function runDeliver(jobIds) {
     await sendToTab(tab.id, { type: 'GO_CHAT', job: job });
     await waitTabComplete(tab.id); await sleep(2500);
 
-    // 4. 聊天页当前打开的即该岗位会话，先发图片再发招呼语（无需匹配）
+    // 4. 聊天页当前打开的即该岗位会话：先发招呼语 → 再发简历图片 → 最后发固定跟进用语（无需匹配）
     const u = await curUrl(tab.id);
     if (u.indexOf('/web/geek/chat') < 0) { recordFail(job, '未跳转聊天页'); log('  未进入聊天页，跳过', 'error'); progress(k + 1, ids.length, '投递'); continue; }
     await ensureInjected(tab.id, 'src/content-chat.js');
-    log('  发简历图片 + 招呼语...');
-    const r = await sendToTab(tab.id, { type: 'SEND_ACTIVE', image: cfg.resumeImage || '', greeting: greeting });
+    log('  发招呼语 + 简历图片 + 固定用语...');
+    const r = await sendToTab(tab.id, { type: 'SEND_ACTIVE', image: cfg.resumeImage || '', greeting: greeting, followup: FOLLOWUP_TEXT });
     if (r && r.success) { recordOk(job); state.processed[job.id] = 1; await chrome.storage.local.set({ processed: state.processed }); log('  ✓ 投递成功', 'success'); }
     else { recordFail(job, (r && r.error) || '发送失败'); log('  失败：' + (r && r.error), 'error'); }
     progress(k + 1, ids.length, '投递');
