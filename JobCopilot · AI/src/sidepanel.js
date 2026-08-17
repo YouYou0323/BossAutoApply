@@ -101,11 +101,15 @@ function jobItemHtml(j, matched) {
   const tagHtml = (j.tags && j.tags.length)
     ? '<div class="job-tags">' + j.tags.map(t => '<span>' + esc(t) + '</span>').join('') + '</div>'
     : '';
+  const jdHtml = (j.jd && j.jd.trim())
+    ? '<details class="job-jd"><summary>查看完整 JD</summary><div class="job-jd-body">' + esc(j.jd.trim()) + '</div></details>'
+    : '';
   return '<div class="job-item' + (matched ? '' : ' skip') + '"><input type="checkbox" ' + (matched ? 'checked' : 'disabled') + ' data-id="' + esc(j.id) + '">'
     + '<div class="job-main"><div class="job-title">' + esc(j.name) + '</div>'
     + '<div class="job-sub">' + sub.join(' · ') + '</div>'
     + tagHtml
     + '<div class="job-reason ' + (matched ? 'm' : 's') + '">' + (matched ? '✓' : '✗') + ' ' + esc(j.reason) + '</div>'
+    + jdHtml
     + '</div></div>';
 }
 function esc(s) { return (s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }

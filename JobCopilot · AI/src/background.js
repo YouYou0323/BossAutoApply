@@ -26,7 +26,11 @@ function progress(cur, total, label) { chrome.runtime.sendMessage({ type: 'PROGR
 async function waitIfPaused() { while (state.paused && !state.aborted) await sleep(400); }
 function getCfg() { return chrome.storage.local.get(['dsKey', 'resumeText', 'resumeImage', 'city', 'keyword', 'count', 'outKeywords', 'activeFilter']); }
 function resumeFull(cfg) { return (cfg.resumeText || '').trim(); }
-function jobInfo(j) { return '岗位：' + (j.name || '') + '\n技能标签：' + ((j.tags || []).join('、')) + '\n薪资：' + (j.salary || '') + '\n公司：' + (j.company || ''); }
+function jobInfo(j) {
+  return '岗位：' + (j.name || '') + '\n技能标签：' + ((j.tags || []).join('、'))
+    + '\n薪资：' + (j.salary || '') + '\n公司：' + (j.company || '')
+    + ((j.jd || '').trim() ? '\n完整JD：' + j.jd.trim().slice(0, 1500) : '');
+}
 function findJob(id) { for (var i = 0; i < state.jobs.length; i++) if (state.jobs[i].id === id) return state.jobs[i]; return null; }
 
 // 本地黑名单过滤：公司名/岗位名/标签命中排除词，直接判不匹配，不消耗 AI
@@ -215,6 +219,24 @@ async function runCollect() {
   log('收集到 ' + state.jobs.length + ' 个岗位', 'success');
   if (!state.jobs.length) { state.phase = 'idle'; pushPhase(); return; }
 
+  // 读取完整 JD：逐个点开卡片抓详情面板，供 AI 筛选判断与审核列表展示
+  log('读取完整 JD（' + state.jobs.length + ' 个）...');
+  let jdDone = 0;
+  for (let i = 0; i < state.jobs.length; i++) {
+    if (state.aborted) break; await waitIfPaused();
+    const job = state.jobs[i];
+    const jdr = await sendToTab(tab.id, { type: 'OPEN_JD', job: job });
+    if (jdr && jdr.jd) job.jd = jdr.jd;
+    if (jdr && jdr.company) job.company = jdr.company;
+    if (jdr && jdr.companyLink) job.companyLink = jdr.companyLink;
+    if (jdr && jdr.hrName) job.hrName = jdr.hrName;
+    jdDone++;
+    progress(jdDone, state.jobs.length, '读取JD');
+    await rand(300, 700);
+  }
+  const jdCount = state.jobs.filter(j => (j.jd || '').trim()).length;
+  log('JD 读取完成：' + jdCount + '/' + state.jobs.length + '（供 AI 筛选与审核查看）', jdCount ? 'success' : 'warn');
+
   // 筛选（并发3）
   state.phase = 'screening'; pushPhase();
   log('AI 筛选中（DeepSeek）...');
@@ -274,15 +296,35 @@ async function runDeliver(jobIds) {
     if (jdr && jdr.company) job.company = jdr.company;
     if (jdr && jdr.companyLink) job.companyLink = jdr.companyLink;
     if (jdr && jdr.hrName) job.hrName = jdr.hrName;
+    if (jdr && jdr.jd) job.jd = jdr.jd;
 
-    // 投递前安全门：用最新配置 + 实际打开卡片的公司/岗位/标签重跑本地排除词，命中即跳过
-    const gate = localOutsourceFilter(cfg, job);
-    if (gate) {
-      recordFail(job, gate.reason);
-      log('  ✗ 投递前排除命中，跳过：' + gate.reason, 'error');
+    // ── 发送前复核（身份 / 本地规则 / AI 匹配，任一不通过即跳过）──
+    log('  发送前复核：身份 / 本地规则 / AI...');
+    // 1) 身份核对：实际打开卡片的岗位 ID 与审核时一致（兜底 id 不计）
+    if (jdr && jdr.cardId && job.id && job.id.indexOf('|') < 0 && jdr.cardId !== job.id) {
+      recordFail(job, '发送前复核不通过：岗位 ID 不一致');
+      log('  ✗ 复核不通过（岗位ID不一致：' + jdr.cardId + ' ≠ ' + job.id + '）', 'error');
       progress(k + 1, ids.length, '投递');
       continue;
     }
+    // 2) 本地规则：排除词 + HR 活跃度
+    const rejLocal = localOutsourceFilter(cfg, job) || localActivityFilter(cfg, job);
+    if (rejLocal) {
+      recordFail(job, '发送前复核不通过：' + rejLocal.reason);
+      log('  ✗ 复核不通过（本地规则）：' + rejLocal.reason, 'error');
+      progress(k + 1, ids.length, '投递');
+      continue;
+    }
+    // 3) AI 匹配复核：用投递时重读的完整 JD 重新判断
+    let rejAI = null;
+    try { rejAI = await screenJob(cfg, job); } catch (e) { log('  AI 复核调用失败（不拦截）：' + e.message, 'warn'); }
+    if (rejAI && !rejAI.match) {
+      recordFail(job, '发送前AI复核不通过：' + (rejAI.reason || ''));
+      log('  ✗ 复核不通过（AI）：' + (rejAI.reason || ''), 'error');
+      progress(k + 1, ids.length, '投递');
+      continue;
+    }
+    log('  发送前复核通过', 'info');
 
     // 2. 用【完整JD + 简历】现场生成这个岗位专属的招呼语
     log('  AI生成专属招呼语...');

@@ -235,17 +235,13 @@
   async function openJD(job) {
     const card = findCardByJob(job);
     if (!card) return { success: false, error: '未找到岗位卡片' };
+    const cardInfo = parseCard(card);
     card.scrollIntoView({ block: 'center' });
     await sleep(400);
     card.click();
     await sleep(1600);
-    let jd = '';
-    const det = document.querySelector('.job-detail-box, [class*="job-detail"], .detail-content, .job-detail');
-    if (det) jd = (det.innerText || '').trim();
-    if (!jd) {
-      const secs = document.querySelectorAll('.job-sec-text, [class*="job-sec"], [class*="job-desc"]');
-      jd = Array.from(secs).map(s => (s.innerText || '').trim()).filter(Boolean).join('\n');
-    }
+    let jd = readDetailPanel();
+    if (!jd) { await sleep(1200); jd = readDetailPanel(); } // 详情面板未加载完成时重读一次
     // 详情面板通常也有公司名，作为卡片抓取失败的兜底
     let company = pickText(document, [
       '.job-detail-box .company-info .name, .job-detail-box .company-info a',
@@ -261,7 +257,18 @@
       '.job-detail-box [class*="boss-info"] [class*="name"]'
     ]);
     const coLinkEl = document.querySelector('.job-detail-box a[href*="/gongsi/"], .job-detail-box a[href*="/company_detail/"]');
-    return { success: true, jd: jd.slice(0, 1800), company: company, companyLink: coLinkEl ? coLinkEl.href : '', hrName: hrName };
+    return { success: true, jd: jd.slice(0, 1800), company: company, companyLink: coLinkEl ? coLinkEl.href : '', hrName: hrName, cardId: cardInfo.id, detailUrl: cardInfo.link };
+  }
+
+  function readDetailPanel() {
+    let jd = '';
+    const det = document.querySelector('.job-detail-box, [class*="job-detail"], .detail-content, .job-detail');
+    if (det) jd = (det.innerText || '').trim();
+    if (!jd) {
+      const secs = document.querySelectorAll('.job-sec-text, [class*="job-sec"], [class*="job-desc"]');
+      jd = Array.from(secs).map(s => (s.innerText || '').trim()).filter(Boolean).join('\n');
+    }
+    return jd;
   }
 
   // 卡片已打开 → 点立即沟通 → 弹窗点"继续沟通"（跳转聊天页）
