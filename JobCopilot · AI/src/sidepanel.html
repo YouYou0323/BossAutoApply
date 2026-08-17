@@ -22,6 +22,15 @@
       <label>简历文字（必填，用于AI筛选 + 生成招呼语）</label>
       <textarea id="resumeText" rows="5" placeholder="粘贴你的简历：技能、项目经历、教育背景、实习经历等，越详细招呼语越精准"></textarea>
 
+      <label>招呼语生成方式</label>
+      <select id="greetingMode">
+        <option value="ai">AI 生成 JD 专属招呼语</option>
+        <option value="fixed">使用固定招呼语</option>
+      </select>
+
+      <label>固定招呼语（可编辑）</label>
+      <textarea id="fixedGreeting" rows="6" placeholder="留空则使用内置默认固定招呼语"></textarea>
+
       <label>岗位关键词</label>
       <input type="text" id="keyword" placeholder="如：数据分析 / AI应用">
 

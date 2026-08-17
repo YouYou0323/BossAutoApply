@@ -1,6 +1,6 @@
 // ===== 侧边栏交互 =====
 const $ = (id) => document.getElementById(id);
-const CFG_FIELDS = ['dsKey', 'resumeText', 'keyword', 'city', 'outKeywords', 'activeFilter', 'count'];
+const CFG_FIELDS = ['dsKey', 'resumeText', 'greetingMode', 'fixedGreeting', 'keyword', 'city', 'outKeywords', 'activeFilter', 'count'];
 
 // 折叠
 document.querySelectorAll('.card-h[data-toggle]').forEach(h => {
@@ -13,6 +13,13 @@ document.querySelectorAll('.card-h[data-toggle]').forEach(h => {
 // 载入配置
 chrome.storage.local.get(CFG_FIELDS.concat(['resumeImage']), (d) => {
   CFG_FIELDS.forEach(f => { if (d[f] !== undefined && $(f)) $(f).value = d[f]; });
+  if (!d.greetingMode && $('greetingMode')) $('greetingMode').value = 'ai'; // 默认 AI 专属
+  if (!d.fixedGreeting && $('fixedGreeting')) {
+    // 首次使用：把内置默认固定招呼语预填进编辑框
+    chrome.runtime.sendMessage({ type: 'GET_DEFAULT_GREETING' }, (resp) => {
+      if (resp && resp.greeting) $('fixedGreeting').value = resp.greeting;
+    });
+  }
   if (d.resumeImage) showImg(d.resumeImage);
 });
 

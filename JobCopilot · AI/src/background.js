@@ -26,7 +26,7 @@ function log(text, level) { chrome.runtime.sendMessage({ type: 'LOG', text: text
 function pushPhase() { chrome.runtime.sendMessage({ type: 'PHASE', phase: state.phase }).catch(() => {}); }
 function progress(cur, total, label) { chrome.runtime.sendMessage({ type: 'PROGRESS', cur: cur, total: total, label: label || '' }).catch(() => {}); }
 async function waitIfPaused() { while (state.paused && !state.aborted) await sleep(400); }
-function getCfg() { return chrome.storage.local.get(['dsKey', 'resumeText', 'resumeImage', 'city', 'keyword', 'count', 'outKeywords', 'activeFilter']); }
+function getCfg() { return chrome.storage.local.get(['dsKey', 'resumeText', 'resumeImage', 'city', 'keyword', 'count', 'outKeywords', 'activeFilter', 'greetingMode', 'fixedGreeting']); }
 function resumeFull(cfg) { return (cfg.resumeText || '').trim(); }
 function jobInfo(j) { return '岗位：' + (j.name || '') + '\n技能标签：' + ((j.tags || []).join('、')) + '\n薪资：' + (j.salary || '') + '\n公司：' + (j.company || ''); }
 function findJob(id) { for (var i = 0; i < state.jobs.length; i++) if (state.jobs[i].id === id) return state.jobs[i]; return null; }
@@ -294,15 +294,20 @@ async function runDeliver(jobIds) {
       continue;
     }
 
-    // 2. 用【完整JD + 简历】现场生成这个岗位专属的招呼语
-    log('  AI生成专属招呼语...');
+    // 2. 生成招呼语：AI 专属 或 固定（按配置选择）
     let greeting = '';
-    const callName = deriveGreeting(job);
-    if (callName) log('  称呼：' + callName);
-    try { greeting = await genGreetingFromJD(cfg, job, jd, callName); } catch (e) { log('  生成失败：' + e.message, 'error'); }
-    if (!greeting) {
-      greeting = FALLBACK_GREETING;
-      log('  AI 招呼语为空，改用固定兜底招呼语', 'warn');
+    if (cfg.greetingMode === 'fixed') {
+      greeting = (cfg.fixedGreeting || '').trim() || FALLBACK_GREETING;
+      log('  使用固定招呼语', 'info');
+    } else {
+      log('  AI生成专属招呼语...');
+      const callName = deriveGreeting(job);
+      if (callName) log('  称呼：' + callName);
+      try { greeting = await genGreetingFromJD(cfg, job, jd, callName); } catch (e) { log('  生成失败：' + e.message, 'error'); }
+      if (!greeting) {
+        greeting = (cfg.fixedGreeting || '').trim() || FALLBACK_GREETING;
+        log('  AI 招呼语为空，改用固定兜底招呼语', 'warn');
+      }
     }
 
     // 3. 点立即沟通 → 继续沟通（跳聊天页）
@@ -349,6 +354,7 @@ function finishDeliver() {
 
 // ── 消息入口 ──
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.type === 'GET_DEFAULT_GREETING') { sendResponse({ greeting: FALLBACK_GREETING }); return; }
   if (msg.type === 'START_COLLECT') { runCollect(); sendResponse({ ok: true }); return; }
   if (msg.type === 'START_DELIVER') { runDeliver(msg.jobIds); sendResponse({ ok: true }); return; }
   if (msg.type === 'PAUSE') { state.paused = true; log('已暂停', 'warn'); sendResponse({ ok: true }); return; }
