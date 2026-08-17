@@ -319,7 +319,13 @@ async function runDeliver(jobIds) {
 
     // 3. 点立即沟通 → 继续沟通（跳聊天页）
     log('  建立联系（立即沟通 → 继续沟通）...');
-    await sendToTab(tab.id, { type: 'GO_CHAT', job: job });
+    const gr = await sendToTab(tab.id, { type: 'GO_CHAT', job: job });
+    if (gr && gr.success === false) {
+      recordFail(job, gr.error || '建立联系失败');
+      log('  建立联系失败：' + (gr.error || ''), 'error');
+      progress(k + 1, ids.length, '投递');
+      continue;
+    }
     await waitTabComplete(tab.id); await sleep(2500);
 
     // 4. 聊天页当前打开的即该岗位会话：先发招呼语 → 再发简历图片 → 最后发固定跟进用语（无需匹配）

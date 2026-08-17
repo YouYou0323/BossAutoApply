@@ -205,6 +205,31 @@
     return null;
   }
 
+  // 当前列表里滚动查找目标卡片（BOSS 列表懒加载，目标卡片可能不在初始加载区）
+  async function findCardByJobScrolled(job) {
+    let card = findCardByJob(job);
+    if (card) return card;
+    const container = document.querySelector('.job-list-container, .job-list-box, [class*="job-list"]');
+    const scrollEl = container || document.scrollingElement || document.documentElement;
+    scrollEl.scrollTop = 0;
+    await sleep(600);
+    const step = Math.max(600, Math.round((scrollEl.clientHeight || 800) * 0.7));
+    let lastTop = -1;
+    for (let i = 0; i < 40; i++) {
+      card = findCardByJob(job);
+      if (card) { card.scrollIntoView({ block: 'center' }); await sleep(300); return card; }
+      const h = scrollEl.scrollHeight;
+      scrollEl.scrollTop = Math.min(scrollEl.scrollTop + step, h);
+      await sleep(650);
+      if (scrollEl.scrollTop === lastTop) {
+        await sleep(1200); // 到底后等一次懒加载
+        return findCardByJob(job) || null;
+      }
+      lastTop = scrollEl.scrollTop;
+    }
+    return null;
+  }
+
   function waitFor(sel, timeout) {
     return new Promise((resolve) => {
       const t0 = Date.now();
@@ -263,16 +288,8 @@
 
   // 点开卡片 → 抓取右侧详情面板的完整JD
   async function openJD(job) {
-    let card = findCardByJob(job);
-    if (!card) {
-      // 列表可能因懒加载/滚动被回收：先回到顶部重找一次
-      window.scrollTo(0, 0);
-      const container = document.querySelector('.job-list-container, .job-list-box, [class*="job-list"]');
-      if (container) container.scrollTop = 0;
-      await sleep(800);
-      card = findCardByJob(job);
-    }
-    if (!card) return { success: false, error: '未找到岗位卡片' };
+    let card = await findCardByJobScrolled(job);
+    if (!card) return { success: false, error: '未找到岗位卡片（已滚动搜索）' };
     const cardInfo = parseCard(card);
     card.scrollIntoView({ block: 'center' });
     await sleep(400);
@@ -316,25 +333,21 @@
 
   // 卡片已打开 → 点立即沟通 → 弹窗点"继续沟通"（跳转聊天页）
   async function goChat(job) {
-    // 先重新点开目标卡片，确保面板属于该岗位（防止点击了其他岗位的"立即沟通"浪费打招呼机会）
-    let card = findCardByJob(job);
-    if (card) {
-      card.scrollIntoView({ block: 'center' });
-      await sleep(300);
-      card.click();
-      await sleep(1200);
-    }
-    let btn = await waitFor(SELECTORS.jobs.immediateChatBtn, 5000);
-    if (!btn) {
-      const all = document.querySelectorAll('a, button, span');
-      for (const el of all) { const tx = (el.textContent || '').trim(); if (tx === '立即沟通' || tx === '继续沟通') { btn = el; break; } }
-    }
-    if (!btn && card) { card.click(); await sleep(1200); btn = await waitFor(SELECTORS.jobs.immediateChatBtn, 4000); }
-    if (!btn) return { success: false, error: '未找到立即沟通按钮' };
-    // 点击前核对面板身份，防止点错岗位浪费打招呼次数
+    // 先滚动找到目标卡片并点开，确保操作的是目标岗位
+    const card = await findCardByJobScrolled(job);
+    if (!card) return { success: false, error: '未找到目标岗位卡片（已滚动搜索），未点击立即沟通' };
+    card.scrollIntoView({ block: 'center' });
+    await sleep(300);
+    card.click();
+    await sleep(1200);
+    // 面板身份核对：面板显示明显不是目标岗位时直接放弃，避免点错浪费打招呼次数
     if (!panelMatches(job, readPanelCompany(), readPanelName())) {
       return { success: false, error: '面板岗位与目标不符，未点击立即沟通（已保留打招呼机会）' };
     }
+    // 按钮必须来自目标卡片或详情面板，绝不点击页面上其他岗位的"立即沟通"
+    let btn = card.querySelector('a.op-btn-chat, [class*="op-btn-chat"], a[class*="btn-chat"]');
+    if (!btn) btn = document.querySelector('.job-detail-box a.op-btn-chat, .job-detail-box [class*="op-btn-chat"]');
+    if (!btn) return { success: false, error: '未找到目标岗位的立即沟通按钮' };
     btn.click();
     await sleep(1500);
     const go = await waitForText(['继续沟通'], 4000);
