@@ -278,50 +278,19 @@ async function runDeliver(jobIds) {
     log('  读取岗位JD...');
     const jdr = await sendToTab(tab.id, { type: 'OPEN_JD', job: job });
     const jd = (jdr && jdr.jd) || '';
-    // 复核前快照（判断投递时公司信息是否与筛选时有实质变化）
-    const companyBefore = (job.company || '').trim();
     // 以实际打开卡片的详情为准（覆盖 API 合并可能错配的名字/公司，防止称呼和排除词用错数据）
     if (jdr && jdr.company) job.company = jdr.company;
     if (jdr && jdr.companyLink) job.companyLink = jdr.companyLink;
     if (jdr && jdr.hrName) job.hrName = jdr.hrName;
 
-    // ── 发送前复核（身份 / 本地规则 / AI 匹配，任一不通过即跳过）──
-    log('  发送前复核：身份 / 本地规则 / AI...');
-    // 1) 身份核对：实际打开卡片的岗位 ID 与审核时一致（兜底 id 不计）
-    if (jdr && jdr.cardId && job.id && job.id.indexOf('|') < 0 && jdr.cardId !== job.id) {
-      recordFail(job, '发送前复核不通过：岗位 ID 不一致');
-      log('  ✗ 复核不通过（岗位ID不一致：' + jdr.cardId + ' ≠ ' + job.id + '）', 'error');
+    // 投递前安全门：用最新配置 + 实际打开卡片的公司/岗位/标签重跑本地排除词，命中即跳过
+    const gate = localOutsourceFilter(cfg, job);
+    if (gate) {
+      recordFail(job, gate.reason);
+      log('  ✗ 投递前排除命中，跳过：' + gate.reason, 'error');
       progress(k + 1, ids.length, '投递');
       continue;
     }
-    // 2) 本地规则：排除词 + HR 活跃度
-    const rejLocal = localOutsourceFilter(cfg, job) || localActivityFilter(cfg, job);
-    if (rejLocal) {
-      recordFail(job, '发送前复核不通过：' + rejLocal.reason);
-      log('  ✗ 复核不通过（本地规则）：' + rejLocal.reason, 'error');
-      progress(k + 1, ids.length, '投递');
-      continue;
-    }
-    // 3) AI 复核：仅当投递时公司信息与筛选时有实质变化才重新判断，
-    //    避免对已人工批准的岗位重复否决；解析失败不拦截
-    const companyNow = (job.company || '').trim();
-    const sameCompany = companyBefore && companyNow
-      && (companyNow.indexOf(companyBefore) >= 0 || companyBefore.indexOf(companyNow) >= 0);
-    const dataChanged = (companyNow && !companyBefore) || (companyNow && companyBefore && !sameCompany);
-    if (dataChanged) {
-      let rejAI = null;
-      try { rejAI = await screenJob(cfg, job); } catch (e) { log('  AI 复核调用失败（不拦截）：' + e.message, 'warn'); }
-      if (rejAI && rejAI.match === false && rejAI.reason !== 'AI解析失败') {
-        recordFail(job, '发送前AI复核不通过：' + (rejAI.reason || ''));
-        log('  ✗ 复核不通过（AI）：' + (rejAI.reason || ''), 'error');
-        progress(k + 1, ids.length, '投递');
-        continue;
-      }
-      if (rejAI && rejAI.reason === 'AI解析失败') log('  AI 复核解析失败（不拦截），继续发送', 'warn');
-    } else {
-      log('  AI 复核：数据无变化，沿用筛选结果', 'info');
-    }
-    log('  发送前复核通过', 'info');
 
     // 2. 用【完整JD + 简历】现场生成这个岗位专属的招呼语
     log('  AI生成专属招呼语...');
