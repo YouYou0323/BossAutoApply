@@ -285,6 +285,7 @@ async function runDeliver(jobIds) {
     const job = findJob(ids[k]);
     if (!job) { log('[' + (k + 1) + '/' + ids.length + '] 找不到岗位数据，跳过', 'warn'); continue; }
     log('[' + (k + 1) + '/' + ids.length + '] ' + job.name + ' - ' + (job.company || ''));
+    try {
 
     // 1. 回搜索页，点开卡片读取该岗位完整JD
     const tab = await ensureTab(searchUrl);
@@ -292,6 +293,9 @@ async function runDeliver(jobIds) {
     log('  读取岗位JD...');
     const jdr = await sendToTab(tab.id, { type: 'OPEN_JD', job: job });
     const jd = (jdr && jdr.jd) || '';
+    // 复核前快照（判断投递时数据是否与筛选时有实质变化）
+    const jdBefore = (job.jd || '').trim();
+    const companyBefore = (job.company || '').trim();
     // 以实际打开卡片的详情为准（覆盖 API 合并可能错配的名字/公司，防止称呼和排除词用错数据）
     if (jdr && jdr.company) job.company = jdr.company;
     if (jdr && jdr.companyLink) job.companyLink = jdr.companyLink;
@@ -315,14 +319,27 @@ async function runDeliver(jobIds) {
       progress(k + 1, ids.length, '投递');
       continue;
     }
-    // 3) AI 匹配复核：用投递时重读的完整 JD 重新判断
-    let rejAI = null;
-    try { rejAI = await screenJob(cfg, job); } catch (e) { log('  AI 复核调用失败（不拦截）：' + e.message, 'warn'); }
-    if (rejAI && !rejAI.match) {
-      recordFail(job, '发送前AI复核不通过：' + (rejAI.reason || ''));
-      log('  ✗ 复核不通过（AI）：' + (rejAI.reason || ''), 'error');
-      progress(k + 1, ids.length, '投递');
-      continue;
+    // 3) AI 复核：仅当投递时公司名/完整JD 与筛选时有实质变化才重新判断，
+    //    避免对已人工批准的岗位重复否决；解析失败不拦截
+    const jdNow = (job.jd || '').trim();
+    const companyNow = (job.company || '').trim();
+    const sameCompany = companyBefore && companyNow
+      && (companyNow.indexOf(companyBefore) >= 0 || companyBefore.indexOf(companyNow) >= 0);
+    const dataChanged = (jdNow && jdNow !== jdBefore)
+      || (companyNow && !companyBefore)
+      || (companyNow && companyBefore && !sameCompany);
+    if (dataChanged) {
+      let rejAI = null;
+      try { rejAI = await screenJob(cfg, job); } catch (e) { log('  AI 复核调用失败（不拦截）：' + e.message, 'warn'); }
+      if (rejAI && rejAI.match === false && rejAI.reason !== 'AI解析失败') {
+        recordFail(job, '发送前AI复核不通过：' + (rejAI.reason || ''));
+        log('  ✗ 复核不通过（AI）：' + (rejAI.reason || ''), 'error');
+        progress(k + 1, ids.length, '投递');
+        continue;
+      }
+      if (rejAI && rejAI.reason === 'AI解析失败') log('  AI 复核解析失败（不拦截），继续发送', 'warn');
+    } else {
+      log('  AI 复核：数据无变化，沿用筛选结果', 'info');
     }
     log('  发送前复核通过', 'info');
 
@@ -356,6 +373,11 @@ async function runDeliver(jobIds) {
     if (r && r.success) { recordOk(job); state.processed[job.id] = 1; await chrome.storage.local.set({ processed: state.processed }); log('  ✓ 投递成功', 'success'); }
     else { recordFail(job, (r && r.error) || '发送失败'); log('  失败：' + (r && r.error), 'error'); }
     progress(k + 1, ids.length, '投递');
+    } catch (e) {
+      recordFail(job, '投递异常：' + e.message);
+      log('  ✗ 投递异常（已继续下一个）：' + e.message, 'error');
+      progress(k + 1, ids.length, '投递');
+    }
     await rand(2500, 4500);
   }
   finishDeliver();

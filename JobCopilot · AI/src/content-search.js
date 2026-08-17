@@ -233,7 +233,15 @@
 
   // 点开卡片 → 抓取右侧详情面板的完整JD
   async function openJD(job) {
-    const card = findCardByJob(job);
+    let card = findCardByJob(job);
+    if (!card) {
+      // 列表可能因懒加载/滚动被回收：先回到顶部重找一次
+      window.scrollTo(0, 0);
+      const container = document.querySelector('.job-list-container, .job-list-box, [class*="job-list"]');
+      if (container) container.scrollTop = 0;
+      await sleep(800);
+      card = findCardByJob(job);
+    }
     if (!card) return { success: false, error: '未找到岗位卡片' };
     const cardInfo = parseCard(card);
     card.scrollIntoView({ block: 'center' });

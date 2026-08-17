@@ -10,7 +10,7 @@
 让求职不再重复劳动 —— AI 帮你筛岗位、写招呼语，你只管审核，剩下的交给它。
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Version](https://img.shields.io/badge/version-1.3.0-5b5bd6.svg)
+![Version](https://img.shields.io/badge/version-1.3.1-5b5bd6.svg)
 ![Platform](https://img.shields.io/badge/platform-Edge%20%7C%20Chrome-brightgreen.svg)
 ![Manifest](https://img.shields.io/badge/Manifest-V3-orange.svg)
 ![AI](https://img.shields.io/badge/AI-DeepSeek-purple.svg)
@@ -46,7 +46,7 @@
 - ✅ **审核确认机制**：投递前列出匹配岗位（含公司名、薪资、筛选理由），你勾选确认，绝不盲投
 - 📎 **自动发送简历**：先发定制招呼语，再发简历图片，并附固定跟进用语，一个岗位完整闭环再投下一个
 - 📄 **完整 JD 展示**：筛选阶段逐岗读取完整职位描述，审核列表可展开查看，AI 筛选基于完整 JD 判断
-- 🛡️ **发送前复核**：投递前重读 JD 并重新核对岗位身份 / 本地规则 / AI 匹配，任一不通过自动跳过
+- 🛡️ **发送前复核**：投递前重读 JD 并核对岗位身份 / 本地规则；数据有变化时自动重新 AI 匹配，任一不通过自动跳过，单岗异常不会中断整批
 - 📊 **实时日志面板**：进度、成功/失败一目了然，支持暂停 / 停止 / 重置
 - 🛡️ **拟人化节奏**：随机延迟、逐个投递，自然防风控；已投去重不重复打扰
 
