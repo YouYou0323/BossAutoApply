@@ -280,6 +280,13 @@ async function runDeliver(jobIds) {
     log('  读取岗位JD...');
     const jdr = await sendToTab(tab.id, { type: 'OPEN_JD', job: job });
     const jd = (jdr && jdr.jd) || '';
+    // 面板身份核对：详情面板与目标岗位明显不符时直接跳过，避免点错"立即沟通"浪费打招呼机会
+    if (jdr && jdr.identityFail) {
+      recordFail(job, '身份核对失败：详情面板与目标岗位不符（未消耗打招呼机会）');
+      log('  ✗ 身份核对失败，跳过（未点击立即沟通）', 'error');
+      progress(k + 1, ids.length, '投递');
+      continue;
+    }
     // 以实际打开卡片的详情为准（覆盖 API 合并可能错配的名字/公司，防止称呼和排除词用错数据）
     if (jdr && jdr.company) job.company = jdr.company;
     if (jdr && jdr.companyLink) job.companyLink = jdr.companyLink;

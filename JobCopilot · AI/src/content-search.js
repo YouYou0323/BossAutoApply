@@ -231,6 +231,36 @@
     });
   }
 
+  function readPanelCompany() {
+    const c = pickText(document, [
+      '.job-detail-box .company-info .name, .job-detail-box .company-info a',
+      '.job-detail-box [class*="company-name"]',
+      '.job-detail-box .company-info',
+      '[class*="job-detail"] [class*="company"]'
+    ]);
+    if (c && (c.match(/·/g) || []).length >= 2) return '';
+    return c;
+  }
+
+  function readPanelName() {
+    return pickText(document, [
+      '.job-detail-box .job-name, .job-detail-box [class*="job-name"]',
+      '.job-detail-box .job-title, .job-detail-box [class*="job-title"]',
+      '.job-detail-box .name, .job-detail-box [class*="job-detail"] [class*="name"]'
+    ]);
+  }
+
+  // 面板身份核对：公司名/岗位名任何一方缺失时不做强判；双方都有且都对不上才判不符
+  function panelMatches(job, company, panelName) {
+    const ck = (job.company || '').replace(/\s/g, '');
+    const pc = (company || '').replace(/\s/g, '');
+    const nk = (job.name || '').replace(/\s/g, '');
+    const pn = (panelName || '').replace(/\s/g, '');
+    const coOk = !ck || !pc || pc.indexOf(ck) >= 0 || ck.indexOf(pc) >= 0;
+    const nameOk = !nk || !pn || pn.indexOf(nk) >= 0 || nk.indexOf(pn) >= 0;
+    return coOk && nameOk;
+  }
+
   // 点开卡片 → 抓取右侧详情面板的完整JD
   async function openJD(job) {
     let card = findCardByJob(job);
@@ -250,14 +280,19 @@
     await sleep(1600);
     let jd = readDetailPanel();
     if (!jd) { await sleep(1200); jd = readDetailPanel(); } // 详情面板未加载完成时重读一次
-    // 详情面板通常也有公司名，作为卡片抓取失败的兜底
-    let company = pickText(document, [
-      '.job-detail-box .company-info .name, .job-detail-box .company-info a',
-      '.job-detail-box [class*="company-name"]',
-      '.job-detail-box .company-info',
-      '[class*="job-detail"] [class*="company"]'
-    ]);
-    if (company && (company.match(/·/g) || []).length >= 2) company = '';
+    let company = readPanelCompany();
+    // 面板身份核对：明显不是目标岗位时重开一次
+    if (!panelMatches(job, company, readPanelName())) {
+      card.scrollIntoView({ block: 'center' });
+      await sleep(300);
+      card.click();
+      await sleep(1400);
+      jd = readDetailPanel();
+      company = readPanelCompany();
+    }
+    if (!panelMatches(job, company, readPanelName())) {
+      return { success: false, error: '详情面板与目标岗位身份不符', identityFail: true };
+    }
     const hrName = pickText(document, [
       '.job-detail-box .boss-name',
       '.job-detail-box [class*="boss-name"]',
@@ -281,16 +316,25 @@
 
   // 卡片已打开 → 点立即沟通 → 弹窗点"继续沟通"（跳转聊天页）
   async function goChat(job) {
+    // 先重新点开目标卡片，确保面板属于该岗位（防止点击了其他岗位的"立即沟通"浪费打招呼机会）
+    let card = findCardByJob(job);
+    if (card) {
+      card.scrollIntoView({ block: 'center' });
+      await sleep(300);
+      card.click();
+      await sleep(1200);
+    }
     let btn = await waitFor(SELECTORS.jobs.immediateChatBtn, 5000);
     if (!btn) {
       const all = document.querySelectorAll('a, button, span');
       for (const el of all) { const tx = (el.textContent || '').trim(); if (tx === '立即沟通' || tx === '继续沟通') { btn = el; break; } }
     }
-    if (!btn) { // 面板可能关了，重新点卡片
-      const card = findCardByJob(job);
-      if (card) { card.click(); await sleep(1200); btn = await waitFor(SELECTORS.jobs.immediateChatBtn, 4000); }
-    }
+    if (!btn && card) { card.click(); await sleep(1200); btn = await waitFor(SELECTORS.jobs.immediateChatBtn, 4000); }
     if (!btn) return { success: false, error: '未找到立即沟通按钮' };
+    // 点击前核对面板身份，防止点错岗位浪费打招呼次数
+    if (!panelMatches(job, readPanelCompany(), readPanelName())) {
+      return { success: false, error: '面板岗位与目标不符，未点击立即沟通（已保留打招呼机会）' };
+    }
     btn.click();
     await sleep(1500);
     const go = await waitForText(['继续沟通'], 4000);
