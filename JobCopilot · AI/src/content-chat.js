@@ -47,22 +47,34 @@
     return new File([arr], name || 'resume.png', { type: mime });
   }
 
+  // 会话匹配评分：公司/HR名命中=2分（强信号），岗位名命中=1分（弱信号，不作为独立依据）
+  function matchScore(tx, ck, hk, pk) {
+    let s = 0;
+    if (ck && tx.indexOf(ck) >= 0) s += 2;
+    if (hk && tx.indexOf(hk) >= 0) s += 2;
+    if (pk && tx.indexOf(pk) >= 0) s += 1;
+    return s;
+  }
+
   async function openConversation(company, hrName, position) {
     await waitVisible([SELECTORS.chat.userList], 8000);
     const items = Array.from(document.querySelectorAll(SELECTORS.chat.userList));
     if (!items.length) return { ok: false, err: '会话列表为空' };
-    let target = null;
     const ck = (company || '').replace(/\s/g, '');
     const hk = (hrName || '').replace(/\s/g, '');
     const pk = (position || '').replace(/\s/g, '');
+    let best = null, bestScore = 0, ambiguous = false;
     for (const li of items) {
       const tx = (li.textContent || '').replace(/\s/g, '');
-      if (ck && tx.indexOf(ck) >= 0) { target = li; break; }
-      if (pk && tx.indexOf(pk) >= 0) { target = li; break; }
-      if (hk && tx.indexOf(hk) >= 0) { target = li; break; }
+      const s = matchScore(tx, ck, hk, pk);
+      if (s > bestScore) { bestScore = s; best = li; ambiguous = false; }
+      else if (s > 0 && s === bestScore) { ambiguous = true; }
     }
-    if (!target) return { ok: false, err: '会话列表未找到目标（公司/HR/岗位均不匹配）' }; // 不再盲点第一条，防止发错人
-    target.click();
+    // 必须命中公司或HR名（≥2分）且唯一；仅岗位名命中（1分）不发送，防止同名岗位发错人
+    if (!best || bestScore < 2 || ambiguous) {
+      return { ok: false, err: '会话列表未找到唯一匹配（需公司或HR名命中，岗位名不单独作为依据）' };
+    }
+    best.click();
     await sleep(1600);
     return { ok: true };
   }
@@ -87,6 +99,28 @@
       }
     }
     return '';
+  }
+
+  // 当前打开会话的头部/标题文本（用于发送前排除词终检）
+  function openConversationText() {
+    const out = [];
+    const sels = ['.chat-header', '[class*="chat-header"]', '.chat-title', '[class*="chat-title"]'];
+    for (const sel of sels) {
+      const el = document.querySelector(sel);
+      if (el) {
+        const t = (el.textContent || '').trim();
+        if (t) out.push(t);
+      }
+    }
+    return out.join(' ');
+  }
+
+  // 排除词命中检测（分隔符与后台一致）
+  function hitExclusion(text, outKeywords) {
+    const words = (outKeywords || '').split(/[,，;；、|｜\s]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+    const t = text.toLowerCase();
+    for (const w of words) if (t.indexOf(w) >= 0) return w;
+    return null;
   }
 
   // 打开目标会话并核对身份；匹配不上宁可停发，避免手动切会话后发错人
@@ -178,7 +212,7 @@
   }
 
   // 发给当前已打开的会话（点继续沟通后跳进来的就是目标岗位，无需匹配）
-  async function sendActive(image, greeting, followup, company, hrName, position) {
+  async function sendActive(image, greeting, followup, company, hrName, position, outKeywords) {
     let input = await waitVisible(INPUT_SELS, 6000);
     if (!input) {
       const items = document.querySelectorAll(SELECTORS.chat.userList);
@@ -189,6 +223,9 @@
     // 身份安全门：确保当前打开的是目标会话（防止手动切会话后发错人）
     const oc = await openAndVerify(company, hrName, position);
     if (!oc.ok) return { success: false, error: oc.err };
+    // 排除词终检：当前打开会话的头部文本命中排除词则停发（防止匹配错会话投给排除公司）
+    const hitW = hitExclusion(openConversationText(), outKeywords);
+    if (hitW) return { success: false, error: '当前会话命中排除词「' + hitW + '」，已停止发送' };
     // 顺序：招呼语 → 简历图片 → 固定跟进用语
     const tr1 = await sendText(greeting);
     if (!tr1.ok) return { success: false, error: tr1.err };
@@ -207,7 +244,7 @@
       return true;
     }
     if (msg.type === 'SEND_ACTIVE') {
-      sendActive(msg.image, msg.greeting, msg.followup, msg.company, msg.hrName, msg.position)
+      sendActive(msg.image, msg.greeting, msg.followup, msg.company, msg.hrName, msg.position, msg.outKeywords)
         .then(r => sendResponse(r)).catch(e => sendResponse({ success: false, error: e.message }));
       return true;
     }

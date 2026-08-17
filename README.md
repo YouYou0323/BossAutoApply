@@ -10,7 +10,7 @@
 让求职不再重复劳动 —— AI 帮你筛岗位、写招呼语，你只管审核，剩下的交给它。
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Version](https://img.shields.io/badge/version-1.3.4-5b5bd6.svg)
+![Version](https://img.shields.io/badge/version-1.3.5-5b5bd6.svg)
 ![Platform](https://img.shields.io/badge/platform-Edge%20%7C%20Chrome-brightgreen.svg)
 ![Manifest](https://img.shields.io/badge/Manifest-V3-orange.svg)
 ![AI](https://img.shields.io/badge/AI-DeepSeek-purple.svg)
@@ -45,6 +45,7 @@
 - ✍️ **千岗千面招呼语**：每个岗位单独生成「您好！我熟悉 XXX、做过 XXX」格式招呼语，精准对口
 - ✅ **审核确认机制**：投递前列出匹配岗位（含公司名、薪资、筛选理由），你勾选确认，绝不盲投
 - 📎 **自动发送简历**：先发定制招呼语，再发简历图片，并附固定跟进用语，一个岗位完整闭环再投下一个
+- 🔒 **会话精准匹配**：只按公司/HR 名唯一匹配目标会话（岗位名不单独作为依据），发送前对会话头部做排除词终检
 - 📊 **实时日志面板**：进度、成功/失败一目了然，支持暂停 / 停止 / 重置
 - 🛡️ **拟人化节奏**：随机延迟、逐个投递，自然防风控；已投去重不重复打扰
 

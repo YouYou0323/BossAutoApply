@@ -317,7 +317,8 @@ async function runDeliver(jobIds) {
       followup: FOLLOWUP_TEXT,
       company: job.company || '',
       hrName: job.hrName || '',
-      position: job.name || ''
+      position: job.name || '',
+      outKeywords: cfg.outKeywords || ''
     });
     if (r && r.success) { recordOk(job); state.processed[job.id] = 1; await chrome.storage.local.set({ processed: state.processed }); log('  ✓ 投递成功', 'success'); }
     else { recordFail(job, (r && r.error) || '发送失败'); log('  失败：' + (r && r.error), 'error'); }
