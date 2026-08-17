@@ -164,10 +164,20 @@ async function ensureInjected(tabId, file) {
 }
 function sendToTab(tabId, msg) {
   return new Promise((resolve) => {
-    chrome.tabs.sendMessage(tabId, msg, (resp) => {
-      if (chrome.runtime.lastError) resolve({ success: false, error: chrome.runtime.lastError.message });
-      else resolve(resp || { success: false, error: 'no response' });
-    });
+    let tries = 0;
+    const attempt = () => {
+      chrome.tabs.sendMessage(tabId, msg, (resp) => {
+        if (chrome.runtime.lastError) {
+          const err = chrome.runtime.lastError.message || '';
+          tries++;
+          // BFCache/端口关闭多为页面切换竞态，稍等重试
+          if (tries < 3 && /back\/forward cache|Receiving end does not exist|message channel closed/i.test(err)) {
+            setTimeout(attempt, 1500);
+          } else resolve({ success: false, error: err });
+        } else resolve(resp || { success: false, error: 'no response' });
+      });
+    };
+    attempt();
   });
 }
 function waitTabComplete(tabId) {
@@ -280,6 +290,16 @@ async function runDeliver(jobIds) {
     log('  读取岗位JD...');
     const jdr = await sendToTab(tab.id, { type: 'OPEN_JD', job: job });
     const jd = (jdr && jdr.jd) || '';
+    if (jdr && jdr.success === false) {
+      recordFail(job, jdr.error || '读取岗位失败');
+      log('  ✗ 读取岗位失败：' + (jdr.error || ''), 'error');
+      if (jdr.error && jdr.error.indexOf('安全验证') >= 0) {
+        log('  页面疑似触发安全验证，停止本批投递（请到浏览器人工确认）', 'error');
+        state.aborted = true;
+      }
+      progress(k + 1, ids.length, '投递');
+      continue;
+    }
     // 面板身份核对：详情面板与目标岗位明显不符时直接跳过，避免点错"立即沟通"浪费打招呼机会
     if (jdr && jdr.identityFail) {
       recordFail(job, '身份核对失败：详情面板与目标岗位不符（未消耗打招呼机会）');

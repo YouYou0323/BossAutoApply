@@ -210,24 +210,37 @@
     let card = findCardByJob(job);
     if (card) return card;
     const container = document.querySelector('.job-list-container, .job-list-box, [class*="job-list"]');
-    const scrollEl = container || document.scrollingElement || document.documentElement;
-    scrollEl.scrollTop = 0;
-    await sleep(600);
-    const step = Math.max(600, Math.round((scrollEl.clientHeight || 800) * 0.7));
-    let lastTop = -1;
-    for (let i = 0; i < 40; i++) {
+    // 回顶部，窗口和列表容器都滚，确保触发懒加载（BOSS 两处可能都参与滚动）
+    window.scrollTo(0, 0);
+    if (container) container.scrollTop = 0;
+    await sleep(700);
+    const base = container || document.scrollingElement || document.documentElement;
+    const step = Math.max(700, Math.round((base.clientHeight || 800) * 0.8));
+    let stuck = 0;
+    for (let i = 0; i < 60; i++) {
       card = findCardByJob(job);
       if (card) { card.scrollIntoView({ block: 'center' }); await sleep(300); return card; }
-      const h = scrollEl.scrollHeight;
-      scrollEl.scrollTop = Math.min(scrollEl.scrollTop + step, h);
-      await sleep(650);
-      if (scrollEl.scrollTop === lastTop) {
-        await sleep(1200); // 到底后等一次懒加载
-        return findCardByJob(job) || null;
+      const before = Math.max(container ? container.scrollTop : 0, window.scrollY);
+      const h = Math.max(container ? container.scrollHeight : 0, document.body.scrollHeight, document.documentElement.scrollHeight);
+      const next = Math.min(before + step, h);
+      if (container) container.scrollTop = next;
+      window.scrollTo(0, next);
+      await sleep(800);
+      const after = Math.max(container ? container.scrollTop : 0, window.scrollY);
+      if (after <= before) {
+        stuck++;
+        if (stuck >= 2) { await sleep(1500); card = findCardByJob(job); return card || null; }
+      } else {
+        stuck = 0;
       }
-      lastTop = scrollEl.scrollTop;
     }
     return null;
+  }
+
+  // 页面是否疑似触发 BOSS 安全验证（无岗位卡片时给出明确提示）
+  function pageBlocked() {
+    const t = (document.body ? document.body.innerText : '') || '';
+    return /安全验证|请完成验证|拖动滑块|滑块验证|人机验证|访问异常|操作过于频繁|请稍后再试/.test(t);
   }
 
   function waitFor(sel, timeout) {
@@ -289,7 +302,10 @@
   // 点开卡片 → 抓取右侧详情面板的完整JD
   async function openJD(job) {
     let card = await findCardByJobScrolled(job);
-    if (!card) return { success: false, error: '未找到岗位卡片（已滚动搜索）' };
+    if (!card) {
+      if (pageBlocked()) return { success: false, error: '页面疑似触发安全验证，未找到岗位卡片' };
+      return { success: false, error: '未找到岗位卡片（已滚动搜索）' };
+    }
     const cardInfo = parseCard(card);
     card.scrollIntoView({ block: 'center' });
     await sleep(400);
@@ -335,7 +351,10 @@
   async function goChat(job) {
     // 先滚动找到目标卡片并点开，确保操作的是目标岗位
     const card = await findCardByJobScrolled(job);
-    if (!card) return { success: false, error: '未找到目标岗位卡片（已滚动搜索），未点击立即沟通' };
+    if (!card) {
+      if (pageBlocked()) return { success: false, error: '页面疑似触发安全验证，未点击立即沟通' };
+      return { success: false, error: '未找到目标岗位卡片（已滚动搜索），未点击立即沟通' };
+    }
     card.scrollIntoView({ block: 'center' });
     await sleep(300);
     card.click();

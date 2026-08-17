@@ -10,7 +10,7 @@
 让求职不再重复劳动 —— AI 帮你筛岗位、写招呼语，你只管审核，剩下的交给它。
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Version](https://img.shields.io/badge/version-1.3.9-5b5bd6.svg)
+![Version](https://img.shields.io/badge/version-1.3.10-5b5bd6.svg)
 ![Platform](https://img.shields.io/badge/platform-Edge%20%7C%20Chrome-brightgreen.svg)
 ![Manifest](https://img.shields.io/badge/Manifest-V3-orange.svg)
 ![AI](https://img.shields.io/badge/AI-DeepSeek-purple.svg)
@@ -49,6 +49,7 @@
 - 🔒 **会话精准匹配**：只按公司/HR 名唯一匹配目标会话（岗位名不单独作为依据），发送前对会话头部做排除词终检
 - 🛡️ **打招呼机会保护**：点击「立即沟通」前核对详情面板岗位身份，对不上的岗位直接跳过，不浪费每日打招呼次数
 - 🔎 **卡片滚动搜索**：目标岗位被懒加载挤出当前视图时，自动滚动列表查找并精确定位，按钮只取自目标卡片/面板，绝不点其他岗位
+- ⚠️ **安全验证检测**：页面触发人机验证/安全验证时自动停止投递并提示，避免空转浪费
 - 📊 **实时日志面板**：进度、成功/失败一目了然，支持暂停 / 停止 / 重置
 - 🛡️ **拟人化节奏**：随机延迟、逐个投递，自然防风控；已投去重不重复打扰
 
