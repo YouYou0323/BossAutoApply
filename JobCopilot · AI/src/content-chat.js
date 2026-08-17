@@ -61,9 +61,47 @@
       if (pk && tx.indexOf(pk) >= 0) { target = li; break; }
       if (hk && tx.indexOf(hk) >= 0) { target = li; break; }
     }
-    if (!target) target = items[0]; // 兜底：最新一条（刚建联的通常在顶部）
+    if (!target) return { ok: false, err: '会话列表未找到目标（公司/HR/岗位均不匹配）' }; // 不再盲点第一条，防止发错人
     target.click();
     await sleep(1600);
+    return { ok: true };
+  }
+
+  // 身份核对工具：目标岗位的公司/HR名/岗位名，任一命中即视为匹配
+  function identityKeys(company, hrName, position) {
+    const keys = [];
+    if (company) keys.push(company.replace(/\s/g, ''));
+    if (hrName) keys.push(hrName.replace(/\s/g, ''));
+    if (position) keys.push(position.replace(/\s/g, ''));
+    return keys.filter(Boolean);
+  }
+
+  // 读取当前打开会话的头部文本（读不到返回空串，此时以列表匹配结果为准）
+  function readChatHeader() {
+    const sels = ['.chat-header', '[class*="chat-header"]', '.chat-title', '[class*="chat-title"]'];
+    for (const sel of sels) {
+      const el = document.querySelector(sel);
+      if (el) {
+        const t = (el.textContent || '').trim();
+        if (t) return t;
+      }
+    }
+    return '';
+  }
+
+  // 打开目标会话并核对身份；匹配不上宁可停发，避免手动切会话后发错人
+  async function openAndVerify(company, hrName, position) {
+    const keys = identityKeys(company, hrName, position);
+    if (!keys.length) return { ok: true }; // 无身份信息，无法核对（保持原行为）
+    const oc = await openConversation(company, hrName, position);
+    if (!oc.ok) return { ok: false, err: '会话核对失败：' + oc.err + '（已停止发送，防止发错人）' };
+    const head = readChatHeader();
+    if (head) {
+      const ht = head.replace(/\s/g, '');
+      if (!keys.some(k => ht.indexOf(k) >= 0)) {
+        return { ok: false, err: '会话核对失败：打开后会话头部与目标公司/HR/岗位不一致（已停止发送，防止发错人）' };
+      }
+    }
     return { ok: true };
   }
 
@@ -125,7 +163,7 @@
   }
 
   async function doSend(msg) {
-    const oc = await openConversation(msg.company, msg.hrName, msg.position);
+    const oc = await openAndVerify(msg.company, msg.hrName, msg.position);
     if (!oc.ok) return { success: false, error: oc.err };
     // 顺序：招呼语 → 简历图片 → 固定跟进用语
     const tr1 = await sendText(msg.greeting);
@@ -140,7 +178,7 @@
   }
 
   // 发给当前已打开的会话（点继续沟通后跳进来的就是目标岗位，无需匹配）
-  async function sendActive(image, greeting, followup) {
+  async function sendActive(image, greeting, followup, company, hrName, position) {
     let input = await waitVisible(INPUT_SELS, 6000);
     if (!input) {
       const items = document.querySelectorAll(SELECTORS.chat.userList);
@@ -148,6 +186,9 @@
       input = await waitVisible(INPUT_SELS, 6000);
     }
     if (!input) return { success: false, error: '未找到输入框｜' + dumpInputs() };
+    // 身份安全门：确保当前打开的是目标会话（防止手动切会话后发错人）
+    const oc = await openAndVerify(company, hrName, position);
+    if (!oc.ok) return { success: false, error: oc.err };
     // 顺序：招呼语 → 简历图片 → 固定跟进用语
     const tr1 = await sendText(greeting);
     if (!tr1.ok) return { success: false, error: tr1.err };
@@ -166,7 +207,8 @@
       return true;
     }
     if (msg.type === 'SEND_ACTIVE') {
-      sendActive(msg.image, msg.greeting, msg.followup).then(r => sendResponse(r)).catch(e => sendResponse({ success: false, error: e.message }));
+      sendActive(msg.image, msg.greeting, msg.followup, msg.company, msg.hrName, msg.position)
+        .then(r => sendResponse(r)).catch(e => sendResponse({ success: false, error: e.message }));
       return true;
     }
   });

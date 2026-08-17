@@ -31,7 +31,8 @@ function findJob(id) { for (var i = 0; i < state.jobs.length; i++) if (state.job
 
 // 本地黑名单过滤：公司名/岗位名/标签命中排除词，直接判不匹配，不消耗 AI
 function localOutsourceFilter(cfg, job) {
-  const words = (cfg.outKeywords || '').split(/[,，;；\s]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+  // 兼容逗号/顿号/分号/竖线/空白等多种分隔符，避免用户用顿号分隔时过滤静默失效
+  const words = (cfg.outKeywords || '').split(/[,，;；、|｜\s]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
   if (!words.length) return null;
   const text = [job.company || '', job.name || '', (job.tags || []).join(' ')].join(' ').toLowerCase();
   for (const w of words) {
@@ -269,10 +270,19 @@ async function runDeliver(jobIds) {
     log('  读取岗位JD...');
     const jdr = await sendToTab(tab.id, { type: 'OPEN_JD', job: job });
     const jd = (jdr && jdr.jd) || '';
-    // 卡片上没抓到公司名时，用详情面板的兜底
-    if (jdr && jdr.company && !job.company) job.company = jdr.company;
-    if (jdr && jdr.companyLink && !job.companyLink) job.companyLink = jdr.companyLink;
-    if (jdr && jdr.hrName && !job.hrName) job.hrName = jdr.hrName;
+    // 以实际打开卡片的详情为准（覆盖 API 合并可能错配的名字/公司，防止称呼和排除词用错数据）
+    if (jdr && jdr.company) job.company = jdr.company;
+    if (jdr && jdr.companyLink) job.companyLink = jdr.companyLink;
+    if (jdr && jdr.hrName) job.hrName = jdr.hrName;
+
+    // 投递前安全门：用最新配置 + 实际打开卡片的公司/岗位/标签重跑本地排除词，命中即跳过
+    const gate = localOutsourceFilter(cfg, job);
+    if (gate) {
+      recordFail(job, gate.reason);
+      log('  ✗ 投递前排除命中，跳过：' + gate.reason, 'error');
+      progress(k + 1, ids.length, '投递');
+      continue;
+    }
 
     // 2. 用【完整JD + 简历】现场生成这个岗位专属的招呼语
     log('  AI生成专属招呼语...');
@@ -292,7 +302,15 @@ async function runDeliver(jobIds) {
     if (u.indexOf('/web/geek/chat') < 0) { recordFail(job, '未跳转聊天页'); log('  未进入聊天页，跳过', 'error'); progress(k + 1, ids.length, '投递'); continue; }
     await ensureInjected(tab.id, 'src/content-chat.js');
     log('  发招呼语 + 简历图片 + 固定用语...');
-    const r = await sendToTab(tab.id, { type: 'SEND_ACTIVE', image: cfg.resumeImage || '', greeting: greeting, followup: FOLLOWUP_TEXT });
+    const r = await sendToTab(tab.id, {
+      type: 'SEND_ACTIVE',
+      image: cfg.resumeImage || '',
+      greeting: greeting,
+      followup: FOLLOWUP_TEXT,
+      company: job.company || '',
+      hrName: job.hrName || '',
+      position: job.name || ''
+    });
     if (r && r.success) { recordOk(job); state.processed[job.id] = 1; await chrome.storage.local.set({ processed: state.processed }); log('  ✓ 投递成功', 'success'); }
     else { recordFail(job, (r && r.error) || '发送失败'); log('  失败：' + (r && r.error), 'error'); }
     progress(k + 1, ids.length, '投递');

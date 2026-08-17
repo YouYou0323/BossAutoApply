@@ -112,9 +112,11 @@
         const allItems = [];
         for (const p of apiCache) allItems.push.apply(allItems, p.list);
         for (const job of jobs) {
-          const it = allItems.find(x => x.jobName === job.name && x.brandName && job.company
+          const cands = allItems.filter(x => x.jobName === job.name && x.brandName && job.company
             && (x.brandName.indexOf(job.company) >= 0 || job.company.indexOf(x.brandName) >= 0));
-          if (!it) continue;
+          // 名称匹配不唯一时宁可不要，避免把别的岗位的 HR 名/公司名挂到当前岗位
+          if (cands.length !== 1) continue;
+          const it = cands[0];
           hit++;
           applyApi(it, job);
         }
@@ -192,7 +194,13 @@
 
   function findCardByJob(job) {
     const cards = getCards();
+    // 1) 优先按原始链接精确匹配
+    if (job.link) {
+      for (const c of cards) { const j = parseCard(c); if (j.link && j.link === job.link) return c; }
+    }
+    // 2) 其次按岗位 id
     for (const c of cards) { const j = parseCard(c); if (job.id && j.id === job.id) return c; }
+    // 3) 最后按 岗位名+公司名（同名岗位时可能不唯一，由投递前身份核验兜底）
     for (const c of cards) { const j = parseCard(c); if (j.name === job.name && (!job.company || j.company === job.company)) return c; }
     return null;
   }
@@ -246,7 +254,12 @@
       '[class*="job-detail"] [class*="company"]'
     ]);
     if (company && (company.match(/·/g) || []).length >= 2) company = '';
-    const hrName = pickText(document, ['.job-detail-box .boss-name', '.job-detail-box [class*="boss-name"]']);
+    const hrName = pickText(document, [
+      '.job-detail-box .boss-name',
+      '.job-detail-box [class*="boss-name"]',
+      '.job-detail-box .boss-info .name, .job-detail-box .boss-info [class*="name"]',
+      '.job-detail-box [class*="boss-info"] [class*="name"]'
+    ]);
     const coLinkEl = document.querySelector('.job-detail-box a[href*="/gongsi/"], .job-detail-box a[href*="/company_detail/"]');
     return { success: true, jd: jd.slice(0, 1800), company: company, companyLink: coLinkEl ? coLinkEl.href : '', hrName: hrName };
   }
