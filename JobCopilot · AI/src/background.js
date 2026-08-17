@@ -121,11 +121,12 @@ function nameGender(name) {
 function deriveGreeting(job) {
   const n = (job.hrName || '').trim();
   if (!n) return null;
-  // 1) 姓+先生/女士（如 李女士、王先生）
-  const m = n.match(/^([\u4e00-\u9fa5]{1,2})(先生|女士)$/);
+  // 1) 姓+先生/女士（如 李女士、王先生），兼容 "高女士·HR"、"招聘经理·高女士" 等附加文本
+  let m = n.match(/^([\u4e00-\u9fa5]{1,2})(先生|女士)/);
+  if (!m) m = n.match(/[\s·|｜\-:：,，、]([\u4e00-\u9fa5]{1,2})(先生|女士)$/);
   if (m) {
     if (COMPOUND_SURNAMES.indexOf(m[1]) >= 0) return null; // 复姓，保守不称呼
-    const surname = m[1].charAt(0);
+    const surname = m[1];
     return m[2] === '先生' ? surname + '哥' : surname + '姐';
   }
   // 2) 纯中文姓名（如 张伟、李静）按名推断性别
@@ -150,7 +151,13 @@ async function genGreetingFromJD(cfg, job, jd, callName) {
   const jdText = (jd && jd.trim()) ? jd.trim() : ('技能标签：' + (job.tags || []).join('、'));
   const user = '我的简历：\n' + resumeFull(cfg) + '\n\n目标岗位：' + (job.name || '') + (job.company ? ('（' + job.company + '）') : '') + '\n该岗位JD：\n' + jdText + '\n\n请按格式生成一段招呼语' + (callName ? '（HR姓' + callName.charAt(0) + '，开头必须称呼' + callName + '）' : '（开头必须先写"您好！"问候，再接"我熟悉…"）') + '，直接输出招呼语本身，不要任何多余内容。';
   const raw = await callDS([{ role: 'system', content: sys }, { role: 'user', content: user }], 300);
-  return (raw || '').trim();
+  let greeting = (raw || '').trim();
+  // 称呼兜底：AI 偶尔不遵守"开头必须称呼"的指令，这里强制保证称呼出现在开头
+  if (callName && greeting && greeting.indexOf(callName) !== 0) {
+    const rest = greeting.replace(/^(您好|你好)[！!，,、\s]*/, '');
+    greeting = callName + '，您好！' + rest;
+  }
+  return greeting;
 }
 
 // ── tab 注入 + 发消息 ──
