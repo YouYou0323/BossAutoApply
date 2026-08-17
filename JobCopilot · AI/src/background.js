@@ -26,11 +26,7 @@ function progress(cur, total, label) { chrome.runtime.sendMessage({ type: 'PROGR
 async function waitIfPaused() { while (state.paused && !state.aborted) await sleep(400); }
 function getCfg() { return chrome.storage.local.get(['dsKey', 'resumeText', 'resumeImage', 'city', 'keyword', 'count', 'outKeywords', 'activeFilter']); }
 function resumeFull(cfg) { return (cfg.resumeText || '').trim(); }
-function jobInfo(j) {
-  return '岗位：' + (j.name || '') + '\n技能标签：' + ((j.tags || []).join('、'))
-    + '\n薪资：' + (j.salary || '') + '\n公司：' + (j.company || '')
-    + ((j.jd || '').trim() ? '\n完整JD：' + j.jd.trim().slice(0, 1500) : '');
-}
+function jobInfo(j) { return '岗位：' + (j.name || '') + '\n技能标签：' + ((j.tags || []).join('、')) + '\n薪资：' + (j.salary || '') + '\n公司：' + (j.company || ''); }
 function findJob(id) { for (var i = 0; i < state.jobs.length; i++) if (state.jobs[i].id === id) return state.jobs[i]; return null; }
 
 // 本地黑名单过滤：公司名/岗位名/标签命中排除词，直接判不匹配，不消耗 AI
@@ -226,24 +222,6 @@ async function runCollect() {
   log('收集到 ' + state.jobs.length + ' 个岗位', 'success');
   if (!state.jobs.length) { state.phase = 'idle'; pushPhase(); return; }
 
-  // 读取完整 JD：逐个点开卡片抓详情面板，供 AI 筛选判断与审核列表展示
-  log('读取完整 JD（' + state.jobs.length + ' 个）...');
-  let jdDone = 0;
-  for (let i = 0; i < state.jobs.length; i++) {
-    if (state.aborted) break; await waitIfPaused();
-    const job = state.jobs[i];
-    const jdr = await sendToTab(tab.id, { type: 'OPEN_JD', job: job });
-    if (jdr && jdr.jd) job.jd = jdr.jd;
-    if (jdr && jdr.company) job.company = jdr.company;
-    if (jdr && jdr.companyLink) job.companyLink = jdr.companyLink;
-    if (jdr && jdr.hrName) job.hrName = jdr.hrName;
-    jdDone++;
-    progress(jdDone, state.jobs.length, '读取JD');
-    await rand(300, 700);
-  }
-  const jdCount = state.jobs.filter(j => (j.jd || '').trim()).length;
-  log('JD 读取完成：' + jdCount + '/' + state.jobs.length + '（供 AI 筛选与审核查看）', jdCount ? 'success' : 'warn');
-
   // 筛选（并发3）
   state.phase = 'screening'; pushPhase();
   log('AI 筛选中（DeepSeek）...');
@@ -300,14 +278,12 @@ async function runDeliver(jobIds) {
     log('  读取岗位JD...');
     const jdr = await sendToTab(tab.id, { type: 'OPEN_JD', job: job });
     const jd = (jdr && jdr.jd) || '';
-    // 复核前快照（判断投递时数据是否与筛选时有实质变化）
-    const jdBefore = (job.jd || '').trim();
+    // 复核前快照（判断投递时公司信息是否与筛选时有实质变化）
     const companyBefore = (job.company || '').trim();
     // 以实际打开卡片的详情为准（覆盖 API 合并可能错配的名字/公司，防止称呼和排除词用错数据）
     if (jdr && jdr.company) job.company = jdr.company;
     if (jdr && jdr.companyLink) job.companyLink = jdr.companyLink;
     if (jdr && jdr.hrName) job.hrName = jdr.hrName;
-    if (jdr && jdr.jd) job.jd = jdr.jd;
 
     // ── 发送前复核（身份 / 本地规则 / AI 匹配，任一不通过即跳过）──
     log('  发送前复核：身份 / 本地规则 / AI...');
@@ -326,15 +302,12 @@ async function runDeliver(jobIds) {
       progress(k + 1, ids.length, '投递');
       continue;
     }
-    // 3) AI 复核：仅当投递时公司名/完整JD 与筛选时有实质变化才重新判断，
+    // 3) AI 复核：仅当投递时公司信息与筛选时有实质变化才重新判断，
     //    避免对已人工批准的岗位重复否决；解析失败不拦截
-    const jdNow = (job.jd || '').trim();
     const companyNow = (job.company || '').trim();
     const sameCompany = companyBefore && companyNow
       && (companyNow.indexOf(companyBefore) >= 0 || companyBefore.indexOf(companyNow) >= 0);
-    const dataChanged = (jdNow && jdNow !== jdBefore)
-      || (companyNow && !companyBefore)
-      || (companyNow && companyBefore && !sameCompany);
+    const dataChanged = (companyNow && !companyBefore) || (companyNow && companyBefore && !sameCompany);
     if (dataChanged) {
       let rejAI = null;
       try { rejAI = await screenJob(cfg, job); } catch (e) { log('  AI 复核调用失败（不拦截）：' + e.message, 'warn'); }
