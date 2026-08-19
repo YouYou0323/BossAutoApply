@@ -53,7 +53,7 @@
     const hrName = '';
     const area = pickText(card, [SELECTORS.jobs.jobArea]);
     // 卡片文本里抓 HR 活跃度（刚刚活跃/今日活跃/3日内活跃/本周活跃/本月活跃）
-    const actM = (card.textContent || '').match(/(刚刚活跃|今日活跃|\d+日内活跃|本周活跃|本月活跃|几乎不活跃)/);
+    const actM = (card.textContent || '').match(/(刚刚活跃|刚刚在线|今日活跃|今日在线|昨天活跃|\d+天前活跃|\d+天内活跃|\d+日内活跃|\d+周内活跃|一周内活跃|7日内活跃|近7日活跃|近7天活跃|本周活跃|本月活跃|近30日活跃|一个月内活跃|半年前活跃|数月前活跃|很久前活跃|\d+个月前活跃|几乎不活跃)/);
     const activity = actM ? actM[1] : '';
     return {
       id: id,
@@ -94,7 +94,7 @@
         if (!job.activity) {
           for (const k in it) {
             const v = it[k];
-            if (typeof v === 'string' && /(刚刚活跃|今日活跃|\d+日内活跃|本周活跃|本月活跃|几乎不活跃)/.test(v)) {
+            if (typeof v === 'string' && /(刚刚活跃|刚刚在线|今日活跃|今日在线|昨天活跃|\d+天前活跃|\d+天内活跃|\d+日内活跃|\d+周内活跃|一周内活跃|7日内活跃|近7日活跃|近7天活跃|本周活跃|本月活跃|近30日活跃|一个月内活跃|半年前活跃|数月前活跃|很久前活跃|\d+个月前活跃|几乎不活跃)/.test(v)) {
               job.activity = v;
               break;
             }

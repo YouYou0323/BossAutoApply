@@ -43,17 +43,23 @@ function localOutsourceFilter(cfg, job) {
   return null;
 }
 
-// 活跃度等级：刚刚活跃=5 > 今日=4 > 3日内=3 > 本周=2 > 本月=1 > 几乎不活跃=0；未知=-1
+// 活跃度等级：刚刚=5 > 今日=4 > 3日内=3 > 本周=2 > 本月=1 > 很久前/几乎不活跃=0；未知=-1
 function activityLevel(s) {
   s = s || '';
-  if (s.indexOf('刚刚活跃') >= 0) return 5;
-  if (s.indexOf('在线') >= 0) return 5;
-  if (s.indexOf('今日活跃') >= 0) return 4;
-  const m = s.match(/(\d+)日内活跃/);
-  if (m) return 3;
-  if (s.indexOf('本周活跃') >= 0) return 2;
-  if (s.indexOf('本月活跃') >= 0) return 1;
-  if (s.indexOf('几乎不活跃') >= 0) return 0;
+  if (s.indexOf('刚刚活跃') >= 0 || s.indexOf('刚刚在线') >= 0) return 5;
+  if (s.indexOf('今日活跃') >= 0 || s.indexOf('今日在线') >= 0) return 4;
+  if (s.indexOf('在线') >= 0 && s.indexOf('不在线') < 0) return 5;
+  if (s.indexOf('昨天活跃') >= 0 || /1天前活跃|1日内活跃/.test(s)) return 3;
+  const dm = s.match(/(\d+)天内活跃/) || s.match(/(\d+)日内活跃/);
+  if (dm) { const d = parseInt(dm[1], 10); if (d <= 3) return 3; if (d <= 7) return 2; if (d <= 30) return 1; return 0; }
+  const d2 = s.match(/(\d+)天前活跃/);
+  if (d2) { const d = parseInt(d2[1], 10); if (d <= 3) return 3; if (d <= 7) return 2; if (d <= 30) return 1; return 0; }
+  const wm = s.match(/(\d+)周内活跃/);
+  if (wm) { const w = parseInt(wm[1], 10); if (w <= 1) return 2; if (w <= 4) return 1; return 0; }
+  if (s.indexOf('本周活跃') >= 0 || s.indexOf('一周内活跃') >= 0 || s.indexOf('7日内活跃') >= 0 || s.indexOf('近7日') >= 0) return 2;
+  if (s.indexOf('本月活跃') >= 0 || s.indexOf('一个月内活跃') >= 0 || s.indexOf('近30日') >= 0) return 1;
+  if (s.indexOf('半年前活跃') >= 0 || s.indexOf('数月前活跃') >= 0 || s.indexOf('很久前活跃') >= 0
+    || /\d+个月前活跃/.test(s) || s.indexOf('几乎不活跃') >= 0) return 0;
   return -1;
 }
 
