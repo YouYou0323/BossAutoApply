@@ -162,7 +162,8 @@ async function genGreetingFromJD(cfg, job, jd, callName) {
 async function ensureInjected(tabId, file) {
   try { await chrome.scripting.executeScript({ target: { tabId: tabId }, files: ['src/selectors.js', file] }); } catch (e) {}
 }
-function sendToTab(tabId, msg) {
+function sendToTab(tabId, msg, opts) {
+  opts = opts || {};
   return new Promise((resolve) => {
     let tries = 0;
     const attempt = () => {
@@ -170,8 +171,8 @@ function sendToTab(tabId, msg) {
         if (chrome.runtime.lastError) {
           const err = chrome.runtime.lastError.message || '';
           tries++;
-          // BFCache/端口关闭多为页面切换竞态，稍等重试
-          if (tries < 3 && /back\/forward cache|Receiving end does not exist|message channel closed/i.test(err)) {
+          // BFCache/端口关闭多为页面切换竞态，稍等重试（GO_CHAT 是导航动作，禁止重试防重复点击）
+          if (!opts.noRetry && tries < 3 && /back\/forward cache|Receiving end does not exist|message channel closed|port closed/i.test(err)) {
             setTimeout(attempt, 1500);
           } else resolve({ success: false, error: err });
         } else resolve(resp || { success: false, error: 'no response' });
@@ -339,13 +340,15 @@ async function runDeliver(jobIds) {
 
     // 3. 点立即沟通 → 继续沟通（跳聊天页）
     log('  建立联系（立即沟通 → 继续沟通）...');
-    const gr = await sendToTab(tab.id, { type: 'GO_CHAT', job: job });
-    if (gr && gr.success === false) {
+    const gr = await sendToTab(tab.id, { type: 'GO_CHAT', job: job }, { noRetry: true });
+    // 端口关闭/BFCache 通常意味着页面已跳转（点击已生效），交给 URL 校验确认；真实失败才跳过
+    if (gr && gr.success === false && !/port closed|back\/forward cache|Receiving end|message channel/i.test(gr.error)) {
       recordFail(job, gr.error || '建立联系失败');
       log('  建立联系失败：' + (gr.error || ''), 'error');
       progress(k + 1, ids.length, '投递');
       continue;
     }
+    if (gr && gr.success === false) log('  建立联系响应丢失（页面已跳转），校验聊天页...', 'warn');
     await waitTabComplete(tab.id); await sleep(2500);
 
     // 4. 聊天页当前打开的即该岗位会话：先发招呼语 → 再发简历图片 → 最后发固定跟进用语（无需匹配）
