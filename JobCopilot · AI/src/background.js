@@ -140,6 +140,16 @@ function deriveGreeting(job) {
   return g === '男' ? surname + '哥' : surname + '姐';
 }
 
+// 固定招呼语前追加称呼（称呼可推导且未以称呼开头时），AI 兜底同样适用
+function withCallName(fixed, callName) {
+  let text = (fixed || '').trim() || FALLBACK_GREETING;
+  if (callName && text.indexOf(callName) !== 0) {
+    const rest = text.replace(/^(您好|你好)[，,！!、\s]*/, '');
+    text = callName + '，您好！' + rest;
+  }
+  return text;
+}
+
 // 投递时：结合该岗位的【完整JD】+ 简历，现场生成专属招呼语
 async function genGreetingFromJD(cfg, job, jd, callName) {
   const callRule = callName
@@ -325,16 +335,17 @@ async function runDeliver(jobIds) {
     // 2. 生成招呼语：AI 专属 或 固定（按配置选择）
     let greeting = '';
     if (cfg.greetingMode === 'fixed') {
-      greeting = (cfg.fixedGreeting || '').trim() || FALLBACK_GREETING;
-      log('  使用固定招呼语', 'info');
+      const callName = deriveGreeting(job);
+      greeting = withCallName(cfg.fixedGreeting, callName);
+      log('  使用固定招呼语' + (callName ? '（称呼：' + callName + '）' : ''), 'info');
     } else {
       log('  AI生成专属招呼语...');
       const callName = deriveGreeting(job);
       if (callName) log('  称呼：' + callName);
       try { greeting = await genGreetingFromJD(cfg, job, jd, callName); } catch (e) { log('  生成失败：' + e.message, 'error'); }
       if (!greeting) {
-        greeting = (cfg.fixedGreeting || '').trim() || FALLBACK_GREETING;
-        log('  AI 招呼语为空，改用固定兜底招呼语', 'warn');
+        greeting = withCallName(cfg.fixedGreeting, callName);
+        log('  AI 招呼语为空，改用固定兜底招呼语' + (callName ? '（称呼：' + callName + '）' : ''), 'warn');
       }
     }
 
