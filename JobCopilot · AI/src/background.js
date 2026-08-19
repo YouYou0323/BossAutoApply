@@ -58,7 +58,9 @@ function activityLevel(s) {
   if (wm) { const w = parseInt(wm[1], 10); if (w <= 1) return 2; if (w <= 4) return 1; return 0; }
   if (s.indexOf('本周活跃') >= 0 || s.indexOf('一周内活跃') >= 0 || s.indexOf('7日内活跃') >= 0 || s.indexOf('近7日') >= 0) return 2;
   if (s.indexOf('本月活跃') >= 0 || s.indexOf('一个月内活跃') >= 0 || s.indexOf('近30日') >= 0) return 1;
-  if (s.indexOf('半年前活跃') >= 0 || s.indexOf('数月前活跃') >= 0 || s.indexOf('很久前活跃') >= 0
+  if (s.indexOf('半年前活跃') >= 0 || s.indexOf('半年内活跃') >= 0 || s.indexOf('近半年活跃') >= 0
+    || s.indexOf('一年前活跃') >= 0 || s.indexOf('一年内活跃') >= 0 || s.indexOf('近一年活跃') >= 0
+    || s.indexOf('活跃于半年前') >= 0 || s.indexOf('数月前活跃') >= 0 || s.indexOf('很久前活跃') >= 0
     || /\d+个月前活跃/.test(s) || s.indexOf('几乎不活跃') >= 0) return 0;
   return -1;
 }
@@ -69,7 +71,8 @@ function localActivityFilter(cfg, job) {
   if (!req) return null;
   let lv = activityLevel(job.activity);
   if (job.bossOnline === true && lv < 5) lv = 5; // 在线视同高活跃
-  if (lv < 0) return null;
+  // 设置了活跃度要求时，抓不到活跃度的岗位按不达标处理，避免"未知放行"导致筛选失效
+  if (lv < 0) return { match: false, reason: 'HR活跃度未知（无法确认达标，要求' + reqLabel(req) + '）' };
   if (lv < req) return { match: false, reason: 'HR活跃度不足：' + (job.activity || '离线') + '（要求' + reqLabel(req) + '）' };
   return null;
 }

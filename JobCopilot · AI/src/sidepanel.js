@@ -105,6 +105,9 @@ function jobItemHtml(j, matched) {
   }
   if (j.salary) sub.push(esc(j.salary));
   if (j.area) sub.push(esc(j.area));
+  if (j.bossOnline === true) sub.push('活跃：在线');
+  else if (j.activity) sub.push('活跃：' + esc(j.activity));
+  else sub.push('活跃：未知');
   const tagHtml = (j.tags && j.tags.length)
     ? '<div class="job-tags">' + j.tags.map(t => '<span>' + esc(t) + '</span>').join('') + '</div>'
     : '';

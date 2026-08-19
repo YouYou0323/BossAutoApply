@@ -10,7 +10,7 @@
 让求职不再重复劳动 —— AI 帮你筛岗位、写招呼语，你只管审核，剩下的交给它。
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Version](https://img.shields.io/badge/version-1.3.13-5b5bd6.svg)
+![Version](https://img.shields.io/badge/version-1.3.14-5b5bd6.svg)
 ![Platform](https://img.shields.io/badge/platform-Edge%20%7C%20Chrome-brightgreen.svg)
 ![Manifest](https://img.shields.io/badge/Manifest-V3-orange.svg)
 ![AI](https://img.shields.io/badge/AI-DeepSeek-purple.svg)
@@ -35,7 +35,7 @@
 
 - 🏢 **公司名称与明文薪资**：审核列表直接显示公司名（可点击进入公司主页）、工作地点、技能标签与**明文薪资**——通过 MAIN world 钩子截获页面自身的搜索接口，绕过 BOSS 薪资字体反爬，无需新增额外请求
 - 🚫 **外包公司过滤（双保险）**：本地排除词黑名单（命中即跳过、不消耗 AI）+ AI 筛选规则（外包/劳务派遣/人力外包/知名外包企业如中软国际、软通动力等）
-- ⏱️ **HR 活跃度筛选**：按「刚刚 / 今日 / 3日内 / 本周 / 本月活跃」过滤，不达标的岗位自动进入"跳过"区
+- ⏱️ **HR 活跃度筛选**：按「刚刚 / 今日 / 3日内 / 本周 / 本月活跃」过滤，不达标或活跃度未知的岗位自动进入"跳过"区（审核列表直接显示抓到的活跃度文案）
 - ✍️ **称呼个性化招呼语**：按 HR 姓名自动生成「李姐 / 王哥」式称呼（先生/女士后缀 + 姓名性别偏好推断）；信号不明确时使用「您好！」问候，开头统一为「您好！我熟悉 XXX、XXX，做过……」
 
 ## ✨ 功能特性
